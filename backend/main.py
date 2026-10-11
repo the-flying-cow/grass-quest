@@ -41,10 +41,12 @@ class QuestSubmissionResponse(BaseModel):
     element: str
     message: str
 
-@app.get("/",
-         description= "This is the home route.")
-def read_root():
-    return {"message": "Welcome to GrassQuest API! Ready to touch grass."}
+frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
+app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse(os.path.join(frontend_path, "explorerScreen.html"))
 
 
 @app.get("/app", include_in_schema=False)
@@ -106,10 +108,3 @@ def submit_quest(
             status_code=502,
             detail="The reflection classifier is unavailable. Please try again later.",
         )
-
-frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
-app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-
-@app.get("/")
-def serve_frontend():
-    return FileResponse(os.path.join(frontend_path, "explorerScreen.html"))
