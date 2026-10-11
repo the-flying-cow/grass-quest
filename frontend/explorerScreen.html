@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GrassQuest - Field Journal</title>
+    
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="./fogmap.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'clipboard-cream': '#F9F6F0',
+                        'sage-light': '#9DB5A9',
+                        'sage-base': '#5C7B68',
+                        'sage-dark': '#3A4F42',
+                    },
+                    fontFamily: {
+                        serif: ['Lora', 'serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Leaflet overrides to fit the aesthetic */
+        .leaflet-container {
+            font-family: 'Inter', sans-serif;
+        }
+        #questMap {
+            height: 400px;
+            width: 100%;
+            border-radius: 12px;
+        }
+        .grassquest-fog-cloud {
+            filter: blur(12px);
+        }
+        .custom-popup .leaflet-popup-content-wrapper {
+            background-color: #F9F6F0;
+            color: #3A4F42;
+            border: 1px solid #9DB5A9;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .custom-popup .leaflet-popup-tip {
+            background-color: #F9F6F0;
+            border-top: 1px solid #9DB5A9;
+            border-left: 1px solid #9DB5A9;
+        }
+
+        .result-card {
+            border-color: var(--element-color);
+            background: color-mix(in srgb, var(--element-color) 7%, #F9F6F0);
+        }
+
+        .element-badge {
+            background-color: var(--element-color);
+        }
+        
+        /* Hide scrollbar for a cleaner mobile look */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-clipboard-cream text-sage-dark font-sans antialiased min-h-screen flex justify-center">
+    
+    <main class="w-full max-w-md bg-clipboard-cream min-h-screen shadow-2xl relative overflow-y-auto">
+        
+        <!-- Header -->
+        <header class="pt-8 pb-4 px-6 text-center border-b border-sage-light/30">
+            <h1 class="text-3xl font-serif font-semibold tracking-tight text-sage-base">GrassQuest</h1>
+            <p class="text-sm text-sage-light mt-1 font-medium flex items-center justify-center gap-1">
+                <i class="ph ph-map-pin"></i> Your Current Location
+            </p>
+        </header>
+
+        <div class="p-6 flex flex-col gap-6">
+            
+            <!-- Map Container -->
+            <div class="relative w-full rounded-2xl border-2 border-sage-light overflow-hidden shadow-sm z-0 group">
+                <div id="questMap" class="bg-sage-light/20"></div>
+                
+                <!-- Location Status -->
+                <div class="absolute top-3 right-3 bg-clipboard-cream/90 backdrop-blur-sm border border-sage-light text-sage-base px-3 py-1.5 rounded-full text-xs font-semibold z-[400] shadow-sm flex items-center gap-1.5">
+                    <i class="ph-fill ph-navigation-arrow"></i>
+                    <span id="locationStatus" aria-live="polite">Finding your location...</span>
+                </div>
+            </div>
+
+            <!-- Interaction Area -->
+            <div class="flex flex-col gap-5">
+                <button id="getQuestBtn" type="button" class="w-full border-2 border-sage-base text-sage-base py-3 rounded-xl font-semibold tracking-wide hover:bg-sage-light/10 transition-colors">
+                    <i class="ph ph-compass text-lg"></i>
+                    Get Quest
+                </button>
+
+                <section id="activeQuestCard" class="hidden rounded-xl border border-sage-light bg-white/60 p-4" aria-live="polite">
+                    <h2 class="font-serif text-lg font-semibold text-sage-base">Your field quest</h2>
+                    <p class="mt-2 text-sm"><strong>Your location:</strong> <span id="questUserCoordinates"></span></p>
+                    <p class="mt-1 text-sm"><strong>Target zone:</strong> <span id="questTargetCoordinates"></span></p>
+                    <p class="mt-3 text-sm leading-relaxed">Head outside toward this zone, find something that catches your eye, and write a quick 2-line reflection!</p>
+                </section>
+                
+                <!-- Reflection Text Area -->
+                <div class="relative">
+                    <textarea id="reflectionText" rows="3" placeholder="What caught your eye here? Write a quick 2-line reflection." class="w-full bg-transparent border-2 border-sage-light rounded-xl p-4 text-sage-dark placeholder:text-sage-light/80 focus:outline-none focus:border-sage-base focus:ring-1 focus:ring-sage-base resize-none font-serif text-sm transition-colors"></textarea>
+                </div>
+                <input type="hidden" id="latitudeInput" name="latitude">
+                <input type="hidden" id="longitudeInput" name="longitude">
+
+                <!-- Complete Button -->
+                <button id="completeQuestBtn" class="w-full bg-sage-base text-clipboard-cream py-4 rounded-xl font-semibold text-[15px] tracking-wide shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                    <i class="ph-bold ph-check-circle text-lg"></i>
+                    Complete Quest
+                </button>
+
+            </div>
+
+            <section id="resultCard" class="result-card hidden overflow-hidden rounded-2xl border-2 shadow-md" aria-live="polite" style="--element-color: #5C7B68;">
+                <div class="p-5">
+                    <span id="elementBadge" class="element-badge inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold text-white"></span>
+                    <h2 id="resultTitle" class="mt-3 font-serif text-xl font-semibold"></h2>
+                    <p id="resultMessage" class="mt-2 text-sm leading-relaxed"></p>
+                    <blockquote id="resultReflection" class="mt-4 border-l-2 border-current/30 pl-3 font-serif text-sm italic"></blockquote>
+                    <p class="mt-4 text-xs opacity-75">Location recorded <time id="resultTimestamp"></time></p>
+                </div>
+            </section>
+            
+            <!-- Toast Notification (Hidden by default) -->
+            <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-sage-dark text-clipboard-cream px-6 py-3 rounded-full text-sm font-medium shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50 flex items-center gap-2 w-max max-w-[90%]">
+                <i class="ph ph-info"></i>
+                <span id="toastMsg">Notification</span>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="loadingOverlay" class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-sage-dark/70 p-6" role="status" aria-live="assertive">
+        <div class="rounded-2xl bg-clipboard-cream px-6 py-5 text-center text-sage-dark shadow-xl">
+            <i class="ph ph-spinner animate-spin text-3xl text-sage-base"></i>
+            <p class="mt-3 font-semibold">Analyzing your response...</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. Map Initialization ---
+            const map = L.map('questMap', {
+                zoomControl: false, // Hide zoom controls for cleaner UI
+                attributionControl: false // Minimalist
+            });
+
+            // Use a light, nature-friendly tile layer OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            window.GrassQuestFogMap.initialize(map);
+
+            // --- 2. UI Interactions ---
+            const completeQuestBtn = document.getElementById('completeQuestBtn');
+            const reflectionText = document.getElementById('reflectionText');
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const locationStatus = document.getElementById('locationStatus');
+            const getQuestBtn = document.getElementById('getQuestBtn');
+            const activeQuestCard = document.getElementById('activeQuestCard');
+            const questUserCoordinates = document.getElementById('questUserCoordinates');
+            const questTargetCoordinates = document.getElementById('questTargetCoordinates');
+            const latitudeInput = document.getElementById('latitudeInput');
+            const longitudeInput = document.getElementById('longitudeInput');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const resultCard = document.getElementById('resultCard');
+            const elementBadge = document.getElementById('elementBadge');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultMessage = document.getElementById('resultMessage');
+            const resultReflection = document.getElementById('resultReflection');
+            const resultTimestamp = document.getElementById('resultTimestamp');
+            const apiBaseOverride = new URLSearchParams(window.location.search).get('apiBase');
+            const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+            const defaultApiBase = window.location.protocol === 'file:' || isLocalHost
+                ? 'http://127.0.0.1:8000'
+                : window.location.origin;
+            const apiBaseUrl = (apiBaseOverride || defaultApiBase).replace(/\/+$/, '');
+            const elementThemes = {
+                'Monsoon Water': {
+                    color: '#0284c7',
+                    badge: '🌊 Monsoon Water',
+                    message: 'You noticed the movement and presence of water. Follow the rain, puddles, or waterways shaping this place.'
+                },
+                'Earthy Terra': {
+                    color: '#78350f',
+                    badge: '🪨 Earthy Terra',
+                    message: 'You connected with the ground beneath you. Look closer at the soil, roots, and rocks that hold this place together.'
+                },
+                'Urban Flora': {
+                    color: '#15803d',
+                    badge: '🌿 Urban Flora',
+                    message: 'You found life growing in the city. Notice how plants and moss make space for themselves in unexpected places.'
+                },
+                'Solar Heat': {
+                    color: '#ea580c',
+                    badge: '☀️ Solar Heat',
+                    message: 'You felt the warmth of the sun. Notice how light and heat shape the surfaces and shelter around you.'
+                }
+            };
+            let currentLocation = null;
+            let currentQuestTarget = null;
+            let locationTimestamp = null;
+            let questMarkerLayer = null;
+
+            function showToast(message) {
+                toastMsg.textContent = message;
+                toast.classList.remove('opacity-0');
+                toast.classList.add('opacity-100');
+                setTimeout(() => {
+                    toast.classList.remove('opacity-100');
+                    toast.classList.add('opacity-0');
+                }, 3000);
+            }
+
+            function formatCoordinates(location) {
+                return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
+            }
+
+            function generateWaypoint(origin) {
+                const earthRadiusMeters = 6371000;
+                const distanceMeters = 200 + Math.random() * 700;
+                const bearing = Math.random() * 2 * Math.PI;
+                const latitude = origin.latitude * Math.PI / 180;
+                const longitude = origin.longitude * Math.PI / 180;
+                const angularDistance = distanceMeters / earthRadiusMeters;
+                const targetLatitude = Math.asin(
+                    Math.sin(latitude) * Math.cos(angularDistance) +
+                    Math.cos(latitude) * Math.sin(angularDistance) * Math.cos(bearing)
+                );
+                const targetLongitude = longitude + Math.atan2(
+                    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latitude),
+                    Math.cos(angularDistance) - Math.sin(latitude) * Math.sin(targetLatitude)
+                );
+
+                return {
+                    latitude: targetLatitude * 180 / Math.PI,
+                    longitude: ((targetLongitude * 180 / Math.PI + 540) % 360) - 180
+                };
+            }
+
+            function renderQuestResult(element, reflection, timestamp) {
+                const theme = elementThemes[element] || {
+                    color: '#5C7B68',
+                    badge: `🌱 ${element || 'Field Discovery'}`,
+                    message: 'Your outdoor discovery has been recorded. Keep noticing the details that make this place unique.'
+                };
+
+                resultCard.style.setProperty('--element-color', theme.color);
+                elementBadge.textContent = theme.badge;
+                resultTitle.textContent = `${element || 'Field Discovery'} unlocked`;
+                resultMessage.textContent = theme.message;
+                resultReflection.textContent = reflection;
+                const unlockedAt = new Date(timestamp);
+                resultTimestamp.dateTime = unlockedAt.toISOString();
+                resultTimestamp.textContent = unlockedAt.toLocaleString();
+                resultCard.classList.remove('hidden');
+            }
+
+            function getBrowserLocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocation is not supported by this browser.'));
+                        return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        (error) => {
+                            if (error.code === error.PERMISSION_DENIED) {
+                                reject(new Error('Allow location access in your browser to continue.'));
+                            } else if (error.code === error.TIMEOUT) {
+                                reject(new Error('Could not get your location in time. Please try again.'));
+                            } else {
+                                reject(new Error('Unable to determine your location.'));
+                            }
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                });
+            }
+
+            // Get the current location once; this does not track the user.
+            if (!navigator.geolocation) {
+                locationStatus.textContent = 'Location unavailable';
+                showToast('Geolocation is not supported by this browser.');
+            } else {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        };
+                        window.GrassQuestFogMap.setCurrentLocation(currentLocation);
+                        locationTimestamp = new Date();
+                        latitudeInput.value = String(currentLocation.latitude);
+                        longitudeInput.value = String(currentLocation.longitude);
+                        const locationCoordinates = [
+                            position.coords.latitude,
+                            position.coords.longitude
+                        ];
+
+                        map.setView(locationCoordinates, 15);
+
+                        L.circle(locationCoordinates, {
+                            radius: position.coords.accuracy,
+                            color: '#5C7B68',
+                            fillColor: '#9DB5A9',
+                            fillOpacity: 0.2
+                        }).addTo(map);
+
+                        L.circleMarker(locationCoordinates, {
+                            radius: 5,
+                            color: '#F9F6F0',
+                            weight: 3,
+                            fillColor: '#5C7B68',
+                            fillOpacity: 1
+                        }).addTo(map).bindPopup('You are here', {
+                            className: 'custom-popup'
+                        });
+
+                        locationStatus.textContent = 'You are here';
+                    },
+                    (error) => {
+                        currentLocation = null;
+                        locationStatus.textContent = 'Location unavailable';
+
+                        if (error.code === error.PERMISSION_DENIED) {
+                            showToast('Allow location access in your browser to show where you are.');
+                        } else if (error.code === error.TIMEOUT) {
+                            showToast('Could not get your location in time. Please try again.');
+                        } else {
+                            showToast('Unable to determine your location.');
+                        }
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+
+            getQuestBtn.addEventListener('click', async () => {
+                getQuestBtn.disabled = true;
+                getQuestBtn.textContent = 'Finding a nearby quest...';
+                try {
+                    const position = await getBrowserLocation();
+                    currentLocation = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude
+                    };
+                    window.GrassQuestFogMap.setCurrentLocation(currentLocation);
+                    locationTimestamp = new Date();
+                    latitudeInput.value = String(currentLocation.latitude);
+                    longitudeInput.value = String(currentLocation.longitude);
+
+                    const targetLocation = generateWaypoint(currentLocation);
+                    currentQuestTarget = targetLocation;
+                    questUserCoordinates.textContent = formatCoordinates(currentLocation);
+                    questTargetCoordinates.textContent = formatCoordinates(targetLocation);
+                    latitudeInput.value = String(targetLocation.latitude);
+                    longitudeInput.value = String(targetLocation.longitude);
+                    activeQuestCard.classList.remove('hidden');
+
+                    if (questMarkerLayer) {
+                        questMarkerLayer.remove();
+                    }
+                    questMarkerLayer = L.layerGroup([
+                        L.circleMarker([currentLocation.latitude, currentLocation.longitude], {
+                            radius: 7,
+                            color: '#F9F6F0',
+                            weight: 3,
+                            fillColor: '#5C7B68',
+                            fillOpacity: 1
+                        }).bindPopup('Your location'),
+                        L.marker([targetLocation.latitude, targetLocation.longitude])
+                            .bindPopup('Your quest zone'),
+                        L.polyline([
+                            [currentLocation.latitude, currentLocation.longitude],
+                            [targetLocation.latitude, targetLocation.longitude]
+                        ], { color: '#5C7B68', dashArray: '6 8' })
+                    ]).addTo(map);
+                    map.fitBounds([
+                        [currentLocation.latitude, currentLocation.longitude],
+                        [targetLocation.latitude, targetLocation.longitude]
+                    ], { padding: [35, 35] });
+                    locationStatus.textContent = 'Quest zone ready';
+                } catch (error) {
+                    showToast(error instanceof Error ? error.message : 'Unable to create a quest right now.');
+                } finally {
+                    getQuestBtn.disabled = false;
+                    getQuestBtn.innerHTML = '<i class="ph ph-compass text-lg"></i> Get Quest';
+                }
+            });
+
+            // Handle Submission
+            completeQuestBtn.addEventListener('click', async function() {
+                const hasText = reflectionText.value.trim().length > 0;
+
+                if (!hasText) {
+                    showToast("Write a quick 2-line reflection about what you see.");
+                    return;
+                }
+
+                if (!currentQuestTarget) {
+                    showToast("Get a quest first so its target location can be recorded.");
+                    return;
+                }
+
+                completeQuestBtn.disabled = true;
+                completeQuestBtn.classList.add('opacity-75');
+                loadingOverlay.classList.remove('hidden');
+
+                const formData = new URLSearchParams();
+                formData.set('latitude', String(currentQuestTarget.latitude));
+                formData.set('longitude', String(currentQuestTarget.longitude));
+                formData.set('reflection', reflectionText.value.trim());
+                const submittedReflection = reflectionText.value.trim();
+
+                try {
+                    const response = await fetch(`${apiBaseUrl}/api/submit-quest`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        throw new Error(result.detail || result.message || 'The quest could not be submitted.');
+                    }
+
+                    const completedArea = window.GrassQuestFogMap.addCompletedQuestToFogMap(result, currentQuestTarget);
+                    renderQuestResult(result.element, submittedReflection, completedArea.timestamp);
+                    reflectionText.value = '';
+                } catch (error) {
+                    showToast(error instanceof Error ? error.message : 'Unable to reach the GrassQuest API.');
+                } finally {
+                    loadingOverlay.classList.add('hidden');
+                    completeQuestBtn.disabled = false;
+                    completeQuestBtn.classList.remove('opacity-75');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

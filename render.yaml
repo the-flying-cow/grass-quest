@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: grassquest
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: HF_USERNAME
+        sync: false
+      - key: HF_SPACE_NAME
+        sync: false
+      - key: HF_TOKEN
+        sync: false
