@@ -1,8 +1,11 @@
-from fastapi import FastAPI, Form, HTTPException
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import os
 from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
@@ -17,6 +20,17 @@ HF_SPACE_NAME = os.getenv("HF_SPACE_NAME") or dotenv_config.get("SPACE_NAME")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 app = FastAPI(title="GrassQuest Backend", version="1.0")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+
+def handle_rate_limit_exceeded(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, RateLimitExceeded):
+        raise exc
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
 
 cors_origins = [
     origin.strip()
@@ -50,7 +64,7 @@ def serve_frontend():
 
 
 @app.get("/app", include_in_schema=False)
-def serve_frontend():
+def serve_app():
     frontend_file = Path(__file__).resolve().parent.parent / "frontend" / "explorerScreen.html"
     return FileResponse(frontend_file)
 
@@ -64,11 +78,19 @@ def serve_fog_map_script():
 @app.post("/api/submit-quest",
            response_model=QuestSubmissionResponse,
            description="Classify a text reflection submitted with the user's coordinates.")
+@limiter.limit("2/day")
 def submit_quest(
+    request: Request,
     latitude: float = Form(..., description="User latitude"),
     longitude: float = Form(..., description="User longitude"),
-    reflection: str = Form(..., description="The user's 2-line reflection")
+    reflection: str = Form(
+        ...,
+        min_length=1,
+        max_length=150,
+        description="The user's reflection (maximum 150 characters)",
+    ),
 ):
+    _ = request
     if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
         raise HTTPException(
             status_code=422,

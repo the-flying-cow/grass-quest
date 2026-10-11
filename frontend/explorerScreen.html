@@ -114,7 +114,8 @@
                 
                 <!-- Reflection Text Area -->
                 <div class="relative">
-                    <textarea id="reflectionText" rows="3" placeholder="What caught your eye here? Write a quick 2-line reflection." class="w-full bg-transparent border-2 border-sage-light rounded-xl p-4 text-sage-dark placeholder:text-sage-light/80 focus:outline-none focus:border-sage-base focus:ring-1 focus:ring-sage-base resize-none font-serif text-sm transition-colors"></textarea>
+                    <textarea id="reflectionText" rows="3" maxlength="150" aria-describedby="reflectionLimit" placeholder="What caught your eye here? Write a quick 2-line reflection." class="w-full bg-transparent border-2 border-sage-light rounded-xl p-4 text-sage-dark placeholder:text-sage-light/80 focus:outline-none focus:border-sage-base focus:ring-1 focus:ring-sage-base resize-none font-serif text-sm transition-colors"></textarea>
+                    <p id="reflectionLimit" class="mt-1 text-xs text-sage-light">Maximum 150 characters.</p>
                 </div>
                 <input type="hidden" id="latitudeInput" name="latitude">
                 <input type="hidden" id="longitudeInput" name="longitude">
@@ -417,6 +418,11 @@
 
                 if (!hasText) {
                     showToast("Write a quick 2-line reflection about what you see.");
+                    return;
+                }
+
+                if (reflectionText.value.trim().length > 150) {
+                    showToast("Keep your reflection to 150 characters or fewer.");
                     return;
                 }
 

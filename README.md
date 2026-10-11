@@ -26,7 +26,7 @@ flowchart LR
 ## Open-source tools and services
 
 - FastAPI, Pydantic, Uvicorn, and Python dotenv for the API and local configuration.
-- Hugging Face Hub/Gradio Client for calling the Space; Gemma 2 model hosting is provided by Hugging Face Spaces.
+- Hugging Face Hub/Gradio Client for calling the Space; Gemma 3 model hosting is provided by Hugging Face Spaces.
 - Leaflet for interactive maps and OpenStreetMap for map data and tiles.
 - Tailwind CSS, Phosphor Icons, and the Inter/Lora fonts are loaded by the page from their public CDNs.
 
@@ -119,7 +119,7 @@ curl -X POST http://127.0.0.1:8000/api/submit-quest \
   --data-urlencode "reflection=The trail was slick after rain."
 ```
 
-The successful response contains the submitted coordinates and reflection, the element returned by the Space, and a user-facing message. The browser stores completed quest areas in its own `localStorage`; this data is local to that browser and is not a backend database.
+The successful response contains the submitted coordinates and reflection, the element returned by the Space, and a user-facing message. Reflections are limited to 150 characters, and the endpoint allows two submissions per day per client IP. The browser stores completed quest areas in its own `localStorage`; this data is local to that browser and is not a backend database.
 
 ## Deploy to Render
 
@@ -134,6 +134,6 @@ The API and frontend are served by the same Render service. Do not add Hugging F
 
 - `.env` and virtual-environment files are ignored by Git. Verify `git status` before pushing and never commit credentials.
 - If a token has ever been committed or shared, revoke it in Hugging Face and create a replacement.
-- The quest endpoint is unauthenticated. CORS limits which browser origins can call it, but it does not prevent direct HTTP clients from doing so. Add appropriate authentication and rate limiting before offering a public production API.
+- The quest endpoint is unauthenticated. CORS limits which browser origins can call it, but it does not prevent direct HTTP clients from doing so. SlowAPI limits submissions to two per day per client IP using in-memory storage; counters reset when the process restarts and are not shared between multiple service instances.
 - Reflections and precise quest coordinates are sent to the configured Hugging Face Space for classification. The map's completed zones are stored in browser `localStorage`.
 - The HTML currently loads some libraries and fonts from public CDNs and map tiles from OpenStreetMap. Tailwind's CDN script is convenient for this small app; for a production build, bundle Tailwind locally and review external-service privacy, licensing, and availability requirements.
