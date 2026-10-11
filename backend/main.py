@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
 from pathlib import Path
@@ -105,3 +106,10 @@ def submit_quest(
             status_code=502,
             detail="The reflection classifier is unavailable. Please try again later.",
         )
+
+frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
+app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse(os.path.join(frontend_path, "explorerScreen.html"))

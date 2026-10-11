@@ -193,7 +193,7 @@
             const defaultApiBase = window.location.protocol === 'file:' || isLocalHost
                 ? 'http://127.0.0.1:8000'
                 : window.location.origin;
-            const apiBaseUrl = (apiBaseOverride || defaultApiBase).replace(/\/+$/, '');
+            const apiBaseUrl = (apiBaseOverride || defaultApiBase || window.location.origin).replace(/\/+$/, '');
             const elementThemes = {
                 'Monsoon Water': {
                     color: '#0284c7',
@@ -434,7 +434,7 @@
                 formData.set('longitude', String(currentQuestTarget.longitude));
                 formData.set('reflection', reflectionText.value.trim());
                 const submittedReflection = reflectionText.value.trim();
-
+                
                 try {
                     const response = await fetch(`${apiBaseUrl}/api/submit-quest`, {
                         method: 'POST',
